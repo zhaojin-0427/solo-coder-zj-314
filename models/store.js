@@ -6,9 +6,12 @@ const performanceProjects = [];
 const allocationPlans = [];
 const auditLogs = [];
 const anomalyRecords = [];
+const warehouses = [];
+const transferRecords = [];
 
 const borrowLocks = new Set();
 const planLocks = new Set();
+const transferLocks = new Set();
 
 let costumeIdCounter = 1;
 let borrowIdCounter = 1;
@@ -19,6 +22,8 @@ let planIdCounter = 1;
 let roleIdCounter = 1;
 let auditIdCounter = 1;
 let anomalyIdCounter = 1;
+let warehouseIdCounter = 1;
+let transferIdCounter = 1;
 
 function acquireBorrowLock(costumeId) {
   if (borrowLocks.has(costumeId)) {
@@ -44,6 +49,18 @@ function releasePlanLock(projectId) {
   planLocks.delete(projectId);
 }
 
+function acquireTransferLock(costumeId) {
+  if (transferLocks.has(costumeId)) {
+    return false;
+  }
+  transferLocks.add(costumeId);
+  return true;
+}
+
+function releaseTransferLock(costumeId) {
+  transferLocks.delete(costumeId);
+}
+
 module.exports = {
   costumes,
   borrowRecords,
@@ -53,12 +70,17 @@ module.exports = {
   allocationPlans,
   auditLogs,
   anomalyRecords,
+  warehouses,
+  transferRecords,
   borrowLocks,
   planLocks,
+  transferLocks,
   acquireBorrowLock,
   releaseBorrowLock,
   acquirePlanLock,
   releasePlanLock,
+  acquireTransferLock,
+  releaseTransferLock,
   costumeIdCounter: () => costumeIdCounter++,
   borrowIdCounter: () => borrowIdCounter++,
   returnIdCounter: () => returnIdCounter++,
@@ -67,5 +89,7 @@ module.exports = {
   planIdCounter: () => planIdCounter++,
   roleIdCounter: () => roleIdCounter++,
   auditIdCounter: () => auditIdCounter++,
-  anomalyIdCounter: () => anomalyIdCounter++
+  anomalyIdCounter: () => anomalyIdCounter++,
+  warehouseIdCounter: () => warehouseIdCounter++,
+  transferIdCounter: () => transferIdCounter++
 };

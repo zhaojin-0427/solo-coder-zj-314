@@ -386,6 +386,8 @@ function getDashboardStats(ctx) {
   const borrowedCount = costumes.filter(c => c.status === 'borrowed').length;
   const cleaningCount = costumes.filter(c => c.status === 'cleaning').length;
   const maintenanceCount = costumes.filter(c => c.status === 'maintenance').length;
+  const transferringCount = costumes.filter(c => c.status === 'transferring').length;
+  const approvedTransferCount = costumes.filter(c => c.status === 'approved_transfer').length;
 
   const today = new Date().toISOString().split('T')[0];
   const todayBorrows = borrowRecords.filter(b => {
@@ -404,7 +406,9 @@ function getDashboardStats(ctx) {
       available: availableCount,
       borrowed: borrowedCount,
       cleaning: cleaningCount,
-      maintenance: maintenanceCount
+      maintenance: maintenanceCount,
+      transferring: transferringCount,
+      approvedTransfer: approvedTransferCount
     },
     todayStats: {
       borrows: todayBorrows,

@@ -5,6 +5,9 @@ const returnController = require('../controllers/returnController');
 const statsController = require('../controllers/statsController');
 const projectController = require('../controllers/projectController');
 const auditController = require('../controllers/auditController');
+const warehouseController = require('../controllers/warehouseController');
+const transferController = require('../controllers/transferController');
+const availabilityController = require('../controllers/availabilityController');
 
 const router = new Router({ prefix: '/api' });
 
@@ -53,7 +56,20 @@ router.get('/', async (ctx) => {
         'GET /api/audit/logs - 审计日志列表查询',
         'GET /api/audit/costumes/:id/timeline - 单件服装生命周期时间线',
         'GET /api/audit/anomalies/scan - 异常事件扫描',
-        'GET /api/audit/anomalies/summary - 异常统计汇总'
+        'GET /api/audit/anomalies/summary - 异常统计汇总',
+        'POST /api/warehouses - 仓库建档',
+        'GET /api/warehouses - 仓库列表',
+        'GET /api/warehouses/:id - 仓库详情',
+        'PUT /api/warehouses/:id - 更新仓库',
+        'POST /api/warehouses/bind-costume - 服装绑定仓库与库位',
+        'POST /api/transfers - 跨仓调拨申请',
+        'GET /api/transfers - 调拨记录列表',
+        'POST /api/transfers/:id/approve - 调拨审核通过',
+        'POST /api/transfers/:id/reject - 调拨审核驳回',
+        'POST /api/transfers/:id/outbound - 调拨出库',
+        'POST /api/transfers/:id/inbound - 调拨入库确认',
+        'POST /api/availability/regional - 区域可用性查询',
+        'GET /api/transfers/statistics - 调拨统计汇总'
       ],
       newEndpoints: [
         {
@@ -164,5 +180,21 @@ router.get('/audit/logs', auditController.getAuditLogs);
 router.get('/audit/costumes/:id/timeline', auditController.getCostumeTimeline);
 router.get('/audit/anomalies/scan', auditController.scanAnomalies);
 router.get('/audit/anomalies/summary', auditController.getAnomalyStats);
+
+router.post('/warehouses', warehouseController.createWarehouse);
+router.get('/warehouses', warehouseController.getWarehouseList);
+router.get('/warehouses/:id', warehouseController.getWarehouseDetail);
+router.put('/warehouses/:id', warehouseController.updateWarehouse);
+router.post('/warehouses/bind-costume', warehouseController.bindCostumeWarehouse);
+
+router.post('/transfers', transferController.createTransfer);
+router.get('/transfers', transferController.getTransferList);
+router.post('/transfers/:id/approve', transferController.approveTransfer);
+router.post('/transfers/:id/reject', transferController.rejectTransfer);
+router.post('/transfers/:id/outbound', transferController.outboundTransfer);
+router.post('/transfers/:id/inbound', transferController.confirmInbound);
+
+router.post('/availability/regional', availabilityController.queryRegionalAvailability);
+router.get('/transfers/statistics', availabilityController.getTransferStatistics);
 
 module.exports = router;

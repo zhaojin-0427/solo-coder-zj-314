@@ -4,6 +4,7 @@ const {
   cleaningSchedule,
   performanceProjects,
   allocationPlans,
+  warehouses,
   acquirePlanLock,
   releasePlanLock,
   acquireBorrowLock,
@@ -82,6 +83,15 @@ function checkCostumeEligibility(costume, startDate, endDate, excludePlanId = nu
   if (costume.status === 'cleaning') {
     issues.push({ code: 'cleaning', message: '服装正在清洗中' });
   }
+  if (costume.status === 'borrowed') {
+    issues.push({ code: 'borrowed', message: '服装正在借出中' });
+  }
+  if (costume.status === 'transferring') {
+    issues.push({ code: 'transferring', message: '服装正在调拨中' });
+  }
+  if (costume.status === 'approved_transfer') {
+    issues.push({ code: 'approved_transfer', message: '服装已批准调拨待出库' });
+  }
   if (costume.cleaningStatus === 'dirty') {
     issues.push({ code: 'dirty', message: '服装待清洗(dirty)' });
   }
@@ -141,7 +151,7 @@ function checkAccessories(costume, requiredAccessories) {
   };
 }
 
-function scoreCostumeForRole(costume, role) {
+function scoreCostumeForRole(costume, role, projectRegion) {
   let score = 0;
 
   if (costume.performanceType === role.performanceType) {
@@ -161,6 +171,10 @@ function scoreCostumeForRole(costume, role) {
     score -= accCheck.missing.length * 5;
   }
 
+  if (projectRegion && costume.warehouseRegion === projectRegion) {
+    score += 20;
+  }
+
   return score;
 }
 
@@ -177,7 +191,33 @@ function buildDateRange(startDate, endDate) {
   return dates;
 }
 
+function inferProjectRegion(project) {
+  const projectBorrows = borrowRecords.filter(b =>
+    b.projectId === project.id && b.status === 'borrowed'
+  );
+  if (projectBorrows.length > 0) {
+    const costume = costumes.find(c => c.id === projectBorrows[0].costumeId);
+    if (costume && costume.warehouseRegion) {
+      return costume.warehouseRegion;
+    }
+  }
+
+  const leaderBorrows = borrowRecords.filter(b =>
+    b.leaderName === project.leaderName && b.status === 'borrowed'
+  );
+  if (leaderBorrows.length > 0) {
+    const costume = costumes.find(c => c.id === leaderBorrows[0].costumeId);
+    if (costume && costume.warehouseRegion) {
+      return costume.warehouseRegion;
+    }
+  }
+
+  return null;
+}
+
 function generateAllocationPlan(project) {
+  const projectRegion = inferProjectRegion(project);
+
   const result = {
     projectId: project.id,
     planId: planIdCounter(),
@@ -187,7 +227,8 @@ function generateAllocationPlan(project) {
     gaps: [],
     alternates: [],
     roleSatisfaction: {},
-    suggestion: null
+    suggestion: null,
+    projectRegion
   };
 
   const sortedRoles = [...project.roles].sort((a, b) => a.priority - b.priority);
@@ -227,7 +268,7 @@ function generateAllocationPlan(project) {
         eligibility,
         accCheck,
         hasMatchingSize,
-        score: scoreCostumeForRole(c, role)
+        score: scoreCostumeForRole(c, role, projectRegion)
       };
     });
 
