@@ -48,6 +48,29 @@ function validateProjectData(ctx, data, isUpdate = false) {
   return null;
 }
 
+function isRangeFullyCovered(start, end, slots) {
+  const s = parseDate(start);
+  const e = parseDate(end);
+  const totalDays = daysBetween(s, e) + 1;
+  const covered = new Set();
+
+  for (const slot of slots) {
+    const slotS = parseDate(slot.startDate);
+    const slotE = parseDate(slot.endDate);
+    const slotDays = daysBetween(slotS, slotE) + 1;
+    for (let i = 0; i < slotDays; i++) {
+      const d = new Date(slotS);
+      d.setDate(slotS.getDate() + i);
+      const dStr = formatDate(d);
+      if (isDateInRange(dStr, start, end)) {
+        covered.add(dStr);
+      }
+    }
+  }
+
+  return covered.size === totalDays;
+}
+
 function checkCostumeEligibility(costume, startDate, endDate, excludePlanId = null) {
   const start = formatDate(startDate);
   const end = formatDate(endDate);
@@ -63,9 +86,9 @@ function checkCostumeEligibility(costume, startDate, endDate, excludePlanId = nu
     issues.push({ code: 'dirty', message: '服装待清洗(dirty)' });
   }
 
-  const hasSlot = costume.availableSlots.some(slot => hasDateOverlap(start, end, slot.startDate, slot.endDate));
-  if (!hasSlot) {
-    issues.push({ code: 'no_slot', message: '档期不在可借用时段内' });
+  const fullyCovered = isRangeFullyCovered(start, end, costume.availableSlots);
+  if (!fullyCovered) {
+    issues.push({ code: 'partial_slot', message: '服装可借用时段无法覆盖完整连续档期' });
   }
 
   const overlappingBorrows = borrowRecords.filter(b => {
@@ -182,9 +205,7 @@ function generateAllocationPlan(project) {
 
     const candidates = costumes.filter(c => {
       if (usedCostumeIds.has(c.id)) return false;
-      if (role.performanceType && c.performanceType !== role.performanceType) {
-        return true;
-      }
+      if (c.performanceType !== role.performanceType) return false;
       return true;
     });
 
