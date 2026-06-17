@@ -191,8 +191,17 @@ function generateAllocationPlan(project) {
   };
 
   const sortedRoles = [...project.roles].sort((a, b) => a.priority - b.priority);
-  const usedCostumeIds = new Set();
   const costumeDateMap = {};
+
+  function isCostumeAvailableInPlan(costumeId, startDate, endDate) {
+    const dates = buildDateRange(startDate, endDate);
+    const occupied = costumeDateMap[costumeId];
+    if (!occupied) return true;
+    for (const d of dates) {
+      if (occupied.has(d)) return false;
+    }
+    return true;
+  }
 
   for (const role of sortedRoles) {
     const roleStart = formatDate(role.startDate);
@@ -204,7 +213,6 @@ function generateAllocationPlan(project) {
     const roleAlternates = [];
 
     const candidates = costumes.filter(c => {
-      if (usedCostumeIds.has(c.id)) return false;
       if (c.performanceType !== role.performanceType) return false;
       return true;
     });
@@ -224,11 +232,14 @@ function generateAllocationPlan(project) {
     });
 
     const fullyEligible = scored.filter(s =>
-      s.eligibility.eligible && s.accCheck.complete && s.hasMatchingSize
+      s.eligibility.eligible &&
+      s.accCheck.complete &&
+      s.hasMatchingSize &&
+      isCostumeAvailableInPlan(s.costume.id, roleStart, roleEnd)
     ).sort((a, b) => b.score - a.score);
 
     const partiallyEligible = scored.filter(s =>
-      !(s.eligibility.eligible && s.accCheck.complete && s.hasMatchingSize)
+      !(s.eligibility.eligible && s.accCheck.complete && s.hasMatchingSize && isCostumeAvailableInPlan(s.costume.id, roleStart, roleEnd))
     ).sort((a, b) => b.score - a.score);
 
     for (let i = 0; i < needed && i < fullyEligible.length; i++) {
@@ -247,7 +258,6 @@ function generateAllocationPlan(project) {
         dates: roleDates,
         score: item.score
       });
-      usedCostumeIds.add(item.costume.id);
       for (const d of roleDates) {
         if (!costumeDateMap[item.costume.id]) costumeDateMap[item.costume.id] = new Set();
         costumeDateMap[item.costume.id].add(d);

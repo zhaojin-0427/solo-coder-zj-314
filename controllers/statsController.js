@@ -416,10 +416,34 @@ function getDashboardStats(ctx) {
   });
 }
 
+function getLatestValidPlans() {
+  const projectPlanMap = {};
+  const validStatuses = ['pending', 'confirmed'];
+
+  for (const plan of allocationPlans) {
+    if (!validStatuses.includes(plan.status)) continue;
+    const projId = plan.projectId;
+    const current = projectPlanMap[projId];
+    if (!current) {
+      projectPlanMap[projId] = plan;
+    } else {
+      if (plan.status === 'confirmed' && current.status !== 'confirmed') {
+        projectPlanMap[projId] = plan;
+      } else if (plan.status === current.status) {
+        if (new Date(plan.generatedAt) > new Date(current.generatedAt)) {
+          projectPlanMap[projId] = plan;
+        }
+      }
+    }
+  }
+
+  return Object.values(projectPlanMap);
+}
+
 function getProjectGapStats(ctx) {
   const { status } = ctx.query;
 
-  let plans = allocationPlans.filter(p => p.status === 'pending' || p.status === 'confirmed');
+  let plans = getLatestValidPlans();
 
   if (status) {
     plans = plans.filter(p => p.status === status);
