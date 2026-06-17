@@ -4,6 +4,8 @@ const returnRecords = [];
 const cleaningSchedule = [];
 const performanceProjects = [];
 const allocationPlans = [];
+const auditLogs = [];
+const anomalyRecords = [];
 
 const borrowLocks = new Set();
 const planLocks = new Set();
@@ -15,6 +17,8 @@ let cleaningIdCounter = 1;
 let projectIdCounter = 1;
 let planIdCounter = 1;
 let roleIdCounter = 1;
+let auditIdCounter = 1;
+let anomalyIdCounter = 1;
 
 function acquireBorrowLock(costumeId) {
   if (borrowLocks.has(costumeId)) {
@@ -47,6 +51,8 @@ module.exports = {
   cleaningSchedule,
   performanceProjects,
   allocationPlans,
+  auditLogs,
+  anomalyRecords,
   borrowLocks,
   planLocks,
   acquireBorrowLock,
@@ -59,5 +65,7 @@ module.exports = {
   cleaningIdCounter: () => cleaningIdCounter++,
   projectIdCounter: () => projectIdCounter++,
   planIdCounter: () => planIdCounter++,
-  roleIdCounter: () => roleIdCounter++
+  roleIdCounter: () => roleIdCounter++,
+  auditIdCounter: () => auditIdCounter++,
+  anomalyIdCounter: () => anomalyIdCounter++
 };

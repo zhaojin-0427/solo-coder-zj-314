@@ -4,6 +4,7 @@ const borrowController = require('../controllers/borrowController');
 const returnController = require('../controllers/returnController');
 const statsController = require('../controllers/statsController');
 const projectController = require('../controllers/projectController');
+const auditController = require('../controllers/auditController');
 
 const router = new Router({ prefix: '/api' });
 
@@ -47,7 +48,12 @@ router.get('/', async (ctx) => {
         'GET /api/stats/project-gap - 项目级缺口统计',
         'GET /api/stats/role-satisfaction - 角色满足率统计',
         'GET /api/stats/costume-occupancy - 服装占用率统计',
-        'GET /api/stats/project-dashboard - 项目级仪表盘'
+        'GET /api/stats/project-dashboard - 项目级仪表盘',
+        'POST /api/audit/logs - 审计事件记录',
+        'GET /api/audit/logs - 审计日志列表查询',
+        'GET /api/audit/costumes/:id/timeline - 单件服装生命周期时间线',
+        'GET /api/audit/anomalies/scan - 异常事件扫描',
+        'GET /api/audit/anomalies/summary - 异常统计汇总'
       ],
       newEndpoints: [
         {
@@ -152,5 +158,11 @@ router.get('/stats/project-gap', statsController.getProjectGapStats);
 router.get('/stats/role-satisfaction', statsController.getRoleSatisfactionStats);
 router.get('/stats/costume-occupancy', statsController.getCostumeOccupancyStats);
 router.get('/stats/project-dashboard', statsController.getProjectDashboardStats);
+
+router.post('/audit/logs', auditController.createAuditLog);
+router.get('/audit/logs', auditController.getAuditLogs);
+router.get('/audit/costumes/:id/timeline', auditController.getCostumeTimeline);
+router.get('/audit/anomalies/scan', auditController.scanAnomalies);
+router.get('/audit/anomalies/summary', auditController.getAnomalyStats);
 
 module.exports = router;
