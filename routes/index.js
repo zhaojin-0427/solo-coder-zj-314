@@ -26,6 +26,7 @@ router.get('/', async (ctx) => {
         'POST /api/cleaning - 新增清洗排期',
         'GET /api/cleaning - 清洗排期列表',
         'PUT /api/cleaning/status - 更新清洗状态',
+        'POST /api/maintenance/complete - 维修/补件完成',
         'GET /api/stats/size-gap - 尺码缺口统计',
         'GET /api/stats/turnover - 服装周转率统计',
         'GET /api/stats/accessory-loss - 配件缺失排行',
@@ -52,6 +53,7 @@ router.get('/returns', returnController.getReturnList);
 router.post('/cleaning', returnController.addCleaningTask);
 router.get('/cleaning', returnController.getCleaningSchedule);
 router.put('/cleaning/status', returnController.updateCleaningStatus);
+router.post('/maintenance/complete', returnController.completeMaintenance);
 
 router.get('/stats/size-gap', statsController.getSizeGapStats);
 router.get('/stats/turnover', statsController.getTurnoverStats);

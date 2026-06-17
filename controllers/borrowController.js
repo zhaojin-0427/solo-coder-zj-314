@@ -1,4 +1,4 @@
-const { costumes, borrowRecords, borrowIdCounter } = require('../models/store');
+const { costumes, borrowRecords, borrowIdCounter, acquireBorrowLock, releaseBorrowLock } = require('../models/store');
 const { generateResponse, matchSize, calculateSizeScore, hasDateOverlap, formatDate, parseDate } = require('../utils/helpers');
 
 function matchCostumes(ctx) {
@@ -13,7 +13,7 @@ function matchCostumes(ctx) {
   const matched = [];
 
   for (const costume of costumes) {
-    if (costume.status !== 'available' && costume.status !== 'cleaning') continue;
+    if (costume.status !== 'available') continue;
 
     if (performanceType && costume.performanceType !== performanceType) continue;
 
@@ -78,57 +78,71 @@ function lockBorrow(ctx) {
     return;
   }
 
-  const costume = costumes.find(c => c.id === costumeId);
-  if (!costume) {
-    ctx.body = generateResponse(404, '服装不存在', null);
+  if (!acquireBorrowLock(costumeId)) {
+    ctx.body = generateResponse(409, '该服装正在处理中，请稍后重试', null);
     return;
   }
 
-  if (costume.cleaningStatus === 'dirty') {
-    ctx.body = generateResponse(400, '服装待清洗，无法借用', null);
-    return;
+  try {
+    const costume = costumes.find(c => c.id === costumeId);
+    if (!costume) {
+      ctx.body = generateResponse(404, '服装不存在', null);
+      return;
+    }
+
+    if (costume.status !== 'available') {
+      ctx.body = generateResponse(400, `服装当前状态为${costume.status}，无法借用`, null);
+      return;
+    }
+
+    if (costume.cleaningStatus === 'dirty') {
+      ctx.body = generateResponse(400, '服装待清洗，无法借用', null);
+      return;
+    }
+
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+
+    const isSlotAvailable = costume.availableSlots.some(slot => {
+      return hasDateOverlap(start, end, slot.startDate, slot.endDate);
+    });
+    if (!isSlotAvailable) {
+      ctx.body = generateResponse(400, '该档期不可借用', null);
+      return;
+    }
+
+    const isBorrowed = borrowRecords.some(borrow => {
+      if (borrow.costumeId !== costumeId) return false;
+      if (borrow.status !== 'borrowed') return false;
+      return hasDateOverlap(start, end, borrow.startDate, borrow.endDate);
+    });
+    if (isBorrowed) {
+      ctx.body = generateResponse(400, '该档期已被借用', null);
+      return;
+    }
+
+    const borrowRecord = {
+      id: borrowIdCounter(),
+      costumeId,
+      costumeNumber: costume.costumeNumber,
+      leaderName,
+      actorName,
+      startDate: start,
+      endDate: end,
+      roleType,
+      size,
+      status: 'borrowed',
+      borrowDate: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    borrowRecords.push(borrowRecord);
+    costume.status = 'borrowed';
+
+    ctx.body = generateResponse(200, '借用锁定成功', borrowRecord);
+  } finally {
+    releaseBorrowLock(costumeId);
   }
-
-  const start = formatDate(startDate);
-  const end = formatDate(endDate);
-
-  const isSlotAvailable = costume.availableSlots.some(slot => {
-    return hasDateOverlap(start, end, slot.startDate, slot.endDate);
-  });
-  if (!isSlotAvailable) {
-    ctx.body = generateResponse(400, '该档期不可借用', null);
-    return;
-  }
-
-  const isBorrowed = borrowRecords.some(borrow => {
-    if (borrow.costumeId !== costumeId) return false;
-    if (borrow.status !== 'borrowed') return false;
-    return hasDateOverlap(start, end, borrow.startDate, borrow.endDate);
-  });
-  if (isBorrowed) {
-    ctx.body = generateResponse(400, '该档期已被借用', null);
-    return;
-  }
-
-  const borrowRecord = {
-    id: borrowIdCounter(),
-    costumeId,
-    costumeNumber: costume.costumeNumber,
-    leaderName,
-    actorName,
-    startDate: start,
-    endDate: end,
-    roleType,
-    size,
-    status: 'borrowed',
-    borrowDate: new Date().toISOString(),
-    createdAt: new Date().toISOString()
-  };
-
-  borrowRecords.push(borrowRecord);
-  costume.status = 'borrowed';
-
-  ctx.body = generateResponse(200, '借用锁定成功', borrowRecord);
 }
 
 function getBorrowList(ctx) {

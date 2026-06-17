@@ -10,7 +10,8 @@ function getSizeGapStats(ctx) {
       total: 0,
       available: 0,
       borrowed: 0,
-      cleaning: 0
+      cleaning: 0,
+      maintenance: 0
     };
   }
 
@@ -25,6 +26,8 @@ function getSizeGapStats(ctx) {
           sizeStats[size].borrowed++;
         } else if (costume.status === 'cleaning') {
           sizeStats[size].cleaning++;
+        } else if (costume.status === 'maintenance') {
+          sizeStats[size].maintenance++;
         }
       }
     }
@@ -41,6 +44,7 @@ function getSizeGapStats(ctx) {
       available: stat.available,
       borrowed: stat.borrowed,
       cleaning: stat.cleaning,
+      maintenance: stat.maintenance,
       gap: gap,
       gapLevel: gap === 0 ? 'normal' : gap < 3 ? 'low' : gap < 5 ? 'medium' : 'high'
     });
@@ -48,13 +52,16 @@ function getSizeGapStats(ctx) {
 
   sizeGaps.sort((a, b) => b.gap - a.gap);
 
+  const topGap = sizeGaps[0]?.gap || 0;
+  const maxGapSize = topGap > 0 ? sizeGaps[0].size : 'N/A';
+
   ctx.body = generateResponse(200, '获取成功', {
     sizeGaps,
     summary: {
       totalCostumes: costumes.length,
       totalBorrowed: borrowedCount,
-      maxGapSize: sizeGaps[0]?.size || 'N/A',
-      maxGap: sizeGaps[0]?.gap || 0
+      maxGapSize,
+      maxGap: topGap
     }
   });
 }
@@ -207,6 +214,7 @@ function getDashboardStats(ctx) {
   const availableCount = costumes.filter(c => c.status === 'available').length;
   const borrowedCount = costumes.filter(c => c.status === 'borrowed').length;
   const cleaningCount = costumes.filter(c => c.status === 'cleaning').length;
+  const maintenanceCount = costumes.filter(c => c.status === 'maintenance').length;
 
   const today = new Date().toISOString().split('T')[0];
   const todayBorrows = borrowRecords.filter(b => {
@@ -224,7 +232,8 @@ function getDashboardStats(ctx) {
       total: totalCostumes,
       available: availableCount,
       borrowed: borrowedCount,
-      cleaning: cleaningCount
+      cleaning: cleaningCount,
+      maintenance: maintenanceCount
     },
     todayStats: {
       borrows: todayBorrows,
