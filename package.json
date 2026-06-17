@@ -1,0 +1,15 @@
+{
+  "name": "costume-rental-api",
+  "version": "1.0.0",
+  "description": "演出服装尺码匹配与借还核验 API 服务",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js"
+  },
+  "dependencies": {
+    "koa": "^2.14.2",
+    "koa-bodyparser": "^4.4.1",
+    "koa-router": "^12.0.0"
+  }
+}
