@@ -3,6 +3,7 @@ const costumeController = require('../controllers/costumeController');
 const borrowController = require('../controllers/borrowController');
 const returnController = require('../controllers/returnController');
 const statsController = require('../controllers/statsController');
+const projectController = require('../controllers/projectController');
 
 const router = new Router({ prefix: '/api' });
 
@@ -88,5 +89,20 @@ router.get('/stats/accessory-loss', statsController.getAccessoryLossStats);
 router.get('/stats/cleaning-wait', statsController.getCleaningWaitStats);
 router.get('/stats/dashboard', statsController.getDashboardStats);
 router.get('/stats/daily-availability', statsController.getDailyAvailabilityStats);
+
+router.post('/projects', projectController.createProject);
+router.get('/projects', projectController.getProjectList);
+router.get('/projects/:id', projectController.getProjectDetail);
+router.put('/projects/:id', projectController.updateProject);
+router.delete('/projects/:id', projectController.deleteProject);
+router.post('/projects/:projectId/generate-plan', projectController.generatePlan);
+router.post('/plans/:planId/confirm', projectController.confirmPlan);
+router.post('/plans/:planId/release', projectController.releasePlan);
+router.get('/leaders/:leaderName/projects', projectController.getLeaderProjects);
+
+router.get('/stats/project-gap', statsController.getProjectGapStats);
+router.get('/stats/role-satisfaction', statsController.getRoleSatisfactionStats);
+router.get('/stats/costume-occupancy', statsController.getCostumeOccupancyStats);
+router.get('/stats/project-dashboard', statsController.getProjectDashboardStats);
 
 module.exports = router;

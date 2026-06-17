@@ -1,4 +1,4 @@
-const { costumes, borrowRecords, returnRecords, cleaningSchedule } = require('../models/store');
+const { costumes, borrowRecords, returnRecords, cleaningSchedule, performanceProjects, allocationPlans } = require('../models/store');
 const { generateResponse, daysBetween, parseDate, formatDate, hasDateOverlap, isDateInRange } = require('../utils/helpers');
 
 function getSizeGapStats(ctx) {
@@ -416,11 +416,326 @@ function getDashboardStats(ctx) {
   });
 }
 
+function getProjectGapStats(ctx) {
+  const { status } = ctx.query;
+
+  let plans = allocationPlans.filter(p => p.status === 'pending' || p.status === 'confirmed');
+
+  if (status) {
+    plans = plans.filter(p => p.status === status);
+  }
+
+  const projectGaps = [];
+  let totalMissingAll = 0;
+  let totalNeededAll = 0;
+
+  for (const plan of plans) {
+    const project = performanceProjects.find(p => p.id === plan.projectId);
+    if (!project) continue;
+
+    const totalNeeded = project.roles.reduce((s, r) => s + r.quantity, 0);
+    const totalAllocated = plan.allocations.length;
+    const totalMissing = plan.summary.totalMissing;
+
+    totalNeededAll += totalNeeded;
+    totalMissingAll += totalMissing;
+
+    const roleGaps = plan.gaps.map(g => ({
+      roleId: g.roleId,
+      roleName: g.roleName,
+      needed: g.needed,
+      allocated: g.allocated,
+      missing: g.missing,
+      priority: g.priority,
+      sizeConstraints: g.sizeConstraints,
+      performanceType: g.performanceType,
+      requiredAccessories: g.requiredAccessories,
+      reasons: g.reasons
+    }));
+
+    projectGaps.push({
+      planId: plan.planId,
+      planStatus: plan.status,
+      projectId: project.id,
+      projectName: project.name,
+      leaderName: project.leaderName,
+      generatedAt: plan.generatedAt,
+      summary: {
+        totalNeeded,
+        totalAllocated,
+        totalMissing,
+        missingRate: plan.summary.missingRate,
+        overallSatisfaction: plan.summary.overallSatisfaction,
+        affectedRoles: plan.summary.affectedRoles
+      },
+      roleGaps
+    });
+  }
+
+  projectGaps.sort((a, b) => b.summary.totalMissing - a.summary.totalMissing);
+
+  ctx.body = generateResponse(200, '获取成功', {
+    summary: {
+      totalPlans: plans.length,
+      totalProjects: new Set(projectGaps.map(p => p.projectId)).size,
+      totalNeeded: totalNeededAll,
+      totalMissing: totalMissingAll,
+      overallMissingRate: totalNeededAll > 0
+        ? ((totalMissingAll / totalNeededAll) * 100).toFixed(1) + '%'
+        : '0%'
+    },
+    projectGaps
+  });
+}
+
+function getRoleSatisfactionStats(ctx) {
+  const { projectId, leaderName } = ctx.query;
+
+  let plans = allocationPlans.filter(p => p.status === 'pending' || p.status === 'confirmed');
+  const result = [];
+
+  if (projectId) {
+    plans = plans.filter(p => p.projectId === parseInt(projectId));
+  }
+
+  const roleMap = {};
+
+  for (const plan of plans) {
+    const project = performanceProjects.find(p => p.id === plan.projectId);
+    if (!project) continue;
+    if (leaderName && project.leaderName !== leaderName) continue;
+
+    for (const [roleId, info] of Object.entries(plan.roleSatisfaction)) {
+      if (!roleMap[roleId]) {
+        roleMap[roleId] = {
+          roleId,
+          roleName: info.roleName,
+          totalNeeded: 0,
+          totalAllocated: 0,
+          projectCount: 0,
+          priority: info.priority
+        };
+      }
+      roleMap[roleId].totalNeeded += info.needed;
+      roleMap[roleId].totalAllocated += info.allocated;
+      roleMap[roleId].projectCount++;
+    }
+  }
+
+  const roleList = Object.values(roleMap).map(r => ({
+    ...r,
+    satisfactionRate: r.totalNeeded > 0
+      ? ((r.totalAllocated / r.totalNeeded) * 100).toFixed(1) + '%'
+      : '0%',
+    missing: r.totalNeeded - r.totalAllocated
+  }));
+
+  roleList.sort((a, b) => {
+    const rateA = parseFloat(a.satisfactionRate);
+    const rateB = parseFloat(b.satisfactionRate);
+    return rateA - rateB;
+  });
+
+  const totalNeeded = roleList.reduce((s, r) => s + r.totalNeeded, 0);
+  const totalAllocated = roleList.reduce((s, r) => s + r.totalAllocated, 0);
+
+  ctx.body = generateResponse(200, '获取成功', {
+    summary: {
+      totalRoles: roleList.length,
+      totalNeeded,
+      totalAllocated,
+      overallSatisfaction: totalNeeded > 0
+        ? ((totalAllocated / totalNeeded) * 100).toFixed(1) + '%'
+        : '100%'
+    },
+    roles: roleList
+  });
+}
+
+function getCostumeOccupancyStats(ctx) {
+  const { startDate, endDate, performanceType } = ctx.query;
+
+  if (!startDate || !endDate) {
+    ctx.body = generateResponse(400, '参数不完整：请提供 startDate 和 endDate', null);
+    return;
+  }
+
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    ctx.body = generateResponse(400, '日期格式无效', null);
+    return;
+  }
+
+  if (start > end) {
+    ctx.body = generateResponse(400, 'startDate 不能晚于 endDate', null);
+    return;
+  }
+
+  const startStr = formatDate(start);
+  const endStr = formatDate(end);
+  const totalDays = daysBetween(start, end) + 1;
+  const totalCostumeDays = costumes.length * totalDays;
+
+  let occupiedCostumeDays = 0;
+  const costumeOccupancy = [];
+
+  let filteredCostumes = [...costumes];
+  if (performanceType) {
+    filteredCostumes = filteredCostumes.filter(c => c.performanceType === performanceType);
+  }
+
+  for (const costume of filteredCostumes) {
+    let occupiedDays = 0;
+    const dailyDetails = [];
+
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateStr = formatDate(d);
+
+      let status = 'available';
+
+      const isBorrowed = borrowRecords.some(b => {
+        if (b.costumeId !== costume.id) return false;
+        if (b.status !== 'borrowed') return false;
+        return isDateInRange(dateStr, b.startDate, b.endDate);
+      });
+
+      if (isBorrowed) {
+        status = 'borrowed';
+        occupiedDays++;
+      } else {
+        const isInPlan = allocationPlans.some(p => {
+          if (p.status !== 'pending' && p.status !== 'confirmed') return false;
+          return p.allocations.some(a => {
+            if (a.costumeId !== costume.id) return false;
+            return isDateInRange(dateStr, a.startDate, a.endDate);
+          });
+        });
+
+        if (isInPlan) {
+          status = 'planned';
+          occupiedDays++;
+        } else if (costume.status === 'cleaning') {
+          status = 'cleaning';
+        } else if (costume.status === 'maintenance') {
+          status = 'maintenance';
+        }
+      }
+
+      dailyDetails.push({ date: dateStr, status });
+    }
+
+    occupiedCostumeDays += occupiedDays;
+
+    costumeOccupancy.push({
+      costumeId: costume.id,
+      costumeNumber: costume.costumeNumber,
+      performanceType: costume.performanceType,
+      sizeRange: costume.sizeRange,
+      totalDays,
+      occupiedDays,
+      availableDays: totalDays - occupiedDays,
+      occupancyRate: ((occupiedDays / totalDays) * 100).toFixed(1) + '%',
+      dailyDetails
+    });
+  }
+
+  costumeOccupancy.sort((a, b) => parseFloat(b.occupancyRate) - parseFloat(a.occupancyRate));
+
+  ctx.body = generateResponse(200, '获取成功', {
+    query: {
+      startDate: startStr,
+      endDate: endStr,
+      performanceType: performanceType || null,
+      totalDays
+    },
+    summary: {
+      totalCostumes: filteredCostumes.length,
+      totalCostumeDays: filteredCostumes.length * totalDays,
+      occupiedCostumeDays,
+      availableCostumeDays: filteredCostumes.length * totalDays - occupiedCostumeDays,
+      overallOccupancyRate: filteredCostumes.length > 0
+        ? ((occupiedCostumeDays / (filteredCostumes.length * totalDays)) * 100).toFixed(1) + '%'
+        : '0%'
+    },
+    costumes: costumeOccupancy
+  });
+}
+
+function getProjectDashboardStats(ctx) {
+  const totalProjects = performanceProjects.length;
+  const draftProjects = performanceProjects.filter(p => p.status === 'draft').length;
+  const plannedProjects = performanceProjects.filter(p => p.status === 'planned').length;
+  const confirmedProjects = performanceProjects.filter(p => p.status === 'confirmed').length;
+
+  const totalPlans = allocationPlans.length;
+  const pendingPlans = allocationPlans.filter(p => p.status === 'pending').length;
+  const confirmedPlans = allocationPlans.filter(p => p.status === 'confirmed').length;
+
+  let totalNeeded = 0;
+  let totalAllocated = 0;
+  for (const plan of allocationPlans) {
+    if (plan.summary) {
+      totalNeeded += plan.summary.totalNeeded || 0;
+      totalAllocated += plan.summary.totalAllocated || 0;
+    }
+  }
+
+  const confirmedBorrows = borrowRecords.filter(b => b.projectId);
+
+  const leaderStats = {};
+  for (const project of performanceProjects) {
+    if (!leaderStats[project.leaderName]) {
+      leaderStats[project.leaderName] = {
+        leaderName: project.leaderName,
+        projectCount: 0,
+        confirmedCount: 0
+      };
+    }
+    leaderStats[project.leaderName].projectCount++;
+    if (project.status === 'confirmed') {
+      leaderStats[project.leaderName].confirmedCount++;
+    }
+  }
+
+  ctx.body = generateResponse(200, '获取成功', {
+    projectStats: {
+      total: totalProjects,
+      draft: draftProjects,
+      planned: plannedProjects,
+      confirmed: confirmedProjects
+    },
+    planStats: {
+      total: totalPlans,
+      pending: pendingPlans,
+      confirmed: confirmedPlans
+    },
+    allocationStats: {
+      totalNeeded,
+      totalAllocated,
+      totalMissing: totalNeeded - totalAllocated,
+      overallSatisfaction: totalNeeded > 0
+        ? ((totalAllocated / totalNeeded) * 100).toFixed(1) + '%'
+        : '100%'
+    },
+    leaderRanking: Object.values(leaderStats)
+      .sort((a, b) => b.projectCount - a.projectCount)
+      .slice(0, 10)
+  });
+}
+
 module.exports = {
   getSizeGapStats,
   getTurnoverStats,
   getAccessoryLossStats,
   getCleaningWaitStats,
   getDashboardStats,
-  getDailyAvailabilityStats
+  getDailyAvailabilityStats,
+  getProjectGapStats,
+  getRoleSatisfactionStats,
+  getCostumeOccupancyStats,
+  getProjectDashboardStats
 };
